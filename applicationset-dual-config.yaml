@@ -15,55 +15,58 @@ spec:
               revision: main
               files:
                 - path: "configs/overlays/*/*/config.json"
+              pathParamPrefix: app
 
-          # Second generator: Read config.json from live-configs repo
+          # Second generator: Read ONLY the matching live config
+          # Uses {{.configLiveDir}} from first generator to load the correct file
           - git:
               repoURL: https://github.com/drtinkerer/argocd-matrix-generator-test.git
               revision: main
               files:
-                - path: "live-configs/*/*/config.json"
+                - path: "live-configs/{{.configLiveDir}}/config.json"
+              pathParamPrefix: live
 
   template:
     metadata:
-      # Only create application when matchKeys match (prevents Cartesian product)
-      # We compare matchKey values from both generators
-      name: '{{.appInstance}}'
+      name: '{{.instance}}'
       labels:
-        # Labels from configs/config.json (prefixed with app*)
-        environment: '{{.appEnvironment}}'
-        instance: '{{.appInstance}}'
-        team: '{{.appTeam}}'
-        tier: '{{.appTier}}'
-        component: '{{.appComponent}}'
+        # Labels from configs/config.json
+        environment: '{{.environment}}'
+        instance: '{{.instance}}'
+        team: '{{.labels.team}}'
+        tier: '{{.labels.tier}}'
+        component: '{{.labels.component}}'
         app-name: '{{.appName}}'
-        # Labels from live-configs/config.json (prefixed with live*)
+        # Labels from live-configs/config.json
         live-config-version: '{{.liveConfigVersion}}'
       annotations:
-        # Values from configs/config.json
-        app.replicas: '{{.appReplicas}}'
-        app.image: '{{.appImageRepository}}:{{.appImageTag}}'
+        # Values from configs/config.json (no prefix needed for JSON fields)
+        app.replicas: '{{.replicas}}'
+        app.image: '{{.image.repository}}:{{.image.tag}}'
+        app.path: '{{.app.path.path}}'
         # Values from live-configs/config.json
-        live.db.host: '{{.liveDbHost}}'
-        live.db.port: '{{.liveDbPort}}'
-        live.db.name: '{{.liveDbName}}'
-        live.vault.path: '{{.liveVaultPath}}'
-        live.resources.cpu: '{{.liveCpu}}'
-        live.resources.memory: '{{.liveMemory}}'
+        live.db.host: '{{.dbConfig.host}}'
+        live.db.port: '{{.dbConfig.port}}'
+        live.db.name: '{{.dbConfig.database}}'
+        live.vault.path: '{{.secrets.vaultPath}}'
+        live.resources.cpu: '{{.resources.cpu}}'
+        live.resources.memory: '{{.resources.memory}}'
+        live.path: '{{.live.path.path}}'
     spec:
       project: default
       sources:
         # Source 1: Application base configs from configs repo
         - repoURL: https://github.com/drtinkerer/argocd-matrix-generator-test.git
           targetRevision: main
-          path: '{{.path.path}}'
+          path: '{{.app.path.path}}'
 
         # Source 2: Live environment configs from live-configs repo
         - repoURL: https://github.com/drtinkerer/argocd-matrix-generator-test.git
           targetRevision: main
-          path: 'live-configs/{{.appConfigLiveDir}}'
+          path: 'live-configs/{{.configLiveDir}}'
 
       destination:
-        namespace: '{{.appNamespace}}'
+        namespace: '{{.namespace}}'
         server: https://connectgateway.googleapis.com/v1beta1/projects/178065171687/locations/europe-west3/gkeMemberships/gke-fa-dev
 
       syncPolicy:

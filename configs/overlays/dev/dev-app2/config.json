@@ -1,14 +1,17 @@
 {
-  "matchKey": "dev-app2",
   "appName": "nginx-app",
-  "appEnvironment": "dev",
-  "appInstance": "dev-app2",
-  "appReplicas": 2,
-  "appNamespace": "development",
-  "appConfigLiveDir": "dev/dev-app2",
-  "appTeam": "backend",
-  "appTier": "backend",
-  "appComponent": "api-server",
-  "appImageRepository": "nginx",
-  "appImageTag": "1.25-alpine"
+  "environment": "dev",
+  "instance": "dev-app2",
+  "replicas": 2,
+  "namespace": "development",
+  "configLiveDir": "dev/dev-app2",
+  "labels": {
+    "team": "backend",
+    "tier": "backend",
+    "component": "api-server"
+  },
+  "image": {
+    "repository": "nginx",
+    "tag": "1.25-alpine"
+  }
 }
