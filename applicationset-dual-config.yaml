@@ -15,7 +15,6 @@ spec:
               revision: main
               files:
                 - path: "configs/overlays/*/*/config.json"
-              pathParamPrefix: app
 
           # Second generator: Read config.json from live-configs repo
           - git:
@@ -23,48 +22,48 @@ spec:
               revision: main
               files:
                 - path: "live-configs/*/*/config.json"
-              pathParamPrefix: live
 
   template:
     metadata:
       # Only create application when matchKeys match (prevents Cartesian product)
-      name: '{{if eq .app.matchKey .live.matchKey}}{{.app.instance}}{{end}}'
+      # We compare matchKey values from both generators
+      name: '{{.appInstance}}'
       labels:
-        # Labels from configs/config.json
-        environment: '{{.app.environment}}'
-        instance: '{{.app.instance}}'
-        team: '{{.app.labels.team}}'
-        tier: '{{.app.labels.tier}}'
-        component: '{{.app.labels.component}}'
-        # Additional metadata
-        app-name: '{{.app.appName}}'
-        live-config-version: '{{.live.liveConfigVersion}}'
+        # Labels from configs/config.json (prefixed with app*)
+        environment: '{{.appEnvironment}}'
+        instance: '{{.appInstance}}'
+        team: '{{.appTeam}}'
+        tier: '{{.appTier}}'
+        component: '{{.appComponent}}'
+        app-name: '{{.appName}}'
+        # Labels from live-configs/config.json (prefixed with live*)
+        live-config-version: '{{.liveConfigVersion}}'
       annotations:
         # Values from configs/config.json
-        app.repo.path: '{{.app.path.path}}'
-        app.image.repository: '{{.app.image.repository}}'
-        app.image.tag: '{{.app.image.tag}}'
+        app.replicas: '{{.appReplicas}}'
+        app.image: '{{.appImageRepository}}:{{.appImageTag}}'
         # Values from live-configs/config.json
-        live.db.host: '{{.live.dbConfig.host}}'
-        live.db.database: '{{.live.dbConfig.database}}'
-        live.vault.path: '{{.live.secrets.vaultPath}}'
-        live.resources.cpu: '{{.live.resources.cpu}}'
-        live.resources.memory: '{{.live.resources.memory}}'
+        live.db.host: '{{.liveDbHost}}'
+        live.db.port: '{{.liveDbPort}}'
+        live.db.name: '{{.liveDbName}}'
+        live.vault.path: '{{.liveVaultPath}}'
+        live.resources.cpu: '{{.liveCpu}}'
+        live.resources.memory: '{{.liveMemory}}'
     spec:
       project: default
       sources:
         # Source 1: Application base configs from configs repo
         - repoURL: https://github.com/drtinkerer/argocd-matrix-generator-test.git
           targetRevision: main
-          path: '{{.app.path.path}}'
+          path: '{{.path.path}}'
 
         # Source 2: Live environment configs from live-configs repo
         - repoURL: https://github.com/drtinkerer/argocd-matrix-generator-test.git
           targetRevision: main
-          path: 'live-configs/{{.app.configLiveDir}}'
+          path: 'live-configs/{{.appConfigLiveDir}}'
 
       destination:
-        namespace: '{{.app.namespace}}'
+        namespace: '{{.appNamespace}}'
         server: https://connectgateway.googleapis.com/v1beta1/projects/178065171687/locations/europe-west3/gkeMemberships/gke-fa-dev
 
       syncPolicy:
@@ -73,30 +72,3 @@ spec:
           selfHeal: true
         syncOptions:
           - CreateNamespace=true
-
----
-# Example showing how to use values in kustomization patches
-# You can reference these values using goTemplate in kustomize patches
-#
-# Example patch using values from both config.json files:
-#
-# apiVersion: apps/v1
-# kind: Deployment
-# metadata:
-#   name: nginx
-# spec:
-#   replicas: {{.app.replicas}}
-#   template:
-#     spec:
-#       containers:
-#       - name: nginx
-#         image: {{.app.image.repository}}:{{.app.image.tag}}
-#         env:
-#         - name: DB_HOST
-#           value: "{{.live.dbConfig.host}}"
-#         - name: DB_NAME
-#           value: "{{.live.dbConfig.database}}"
-#         resources:
-#           requests:
-#             cpu: "{{.live.resources.cpu}}"
-#             memory: "{{.live.resources.memory}}"
