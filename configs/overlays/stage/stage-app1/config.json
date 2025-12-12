@@ -1,0 +1,18 @@
+{
+  "matchKey": "stage-app1",
+  "appName": "nginx-app",
+  "environment": "stage",
+  "instance": "stage-app1",
+  "replicas": 2,
+  "namespace": "staging",
+  "configLiveDir": "stage/stage-app1",
+  "labels": {
+    "team": "platform",
+    "tier": "frontend",
+    "component": "web-server"
+  },
+  "image": {
+    "repository": "nginx",
+    "tag": "1.25-alpine"
+  }
+}

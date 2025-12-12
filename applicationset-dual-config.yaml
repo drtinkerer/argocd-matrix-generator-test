@@ -1,0 +1,111 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: dual-config-matrix-apps
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - matrix:
+        generators:
+          # First generator: Read config.json from configs repo
+          - git:
+              repoURL: https://github.com/drtinkerer/argocd-matrix-generator-test.git
+              revision: main
+              files:
+                - path: "configs/overlays/*/*/config.json"
+              pathParamPrefix: app
+
+          # Second generator: Read config.json from live-configs repo
+          - git:
+              repoURL: https://github.com/drtinkerer/argocd-matrix-generator-test.git
+              revision: main
+              files:
+                - path: "live-configs/*/*/config.json"
+              pathParamPrefix: live
+
+        # Filter template: Only combine when matchKey matches
+        # This prevents Cartesian product (N x M) and gives us only N matching pairs
+        template:
+          metadata: {}
+          spec: {}
+          template:
+            metadata:
+              # Only proceed if the matchKeys match
+              name: '{{if eq .app.matchKey .live.matchKey}}{{.app.instance}}{{end}}'
+
+  template:
+    metadata:
+      name: '{{.app.instance}}'
+      labels:
+        # Labels from configs/config.json
+        environment: '{{.app.environment}}'
+        instance: '{{.app.instance}}'
+        team: '{{.app.labels.team}}'
+        tier: '{{.app.labels.tier}}'
+        component: '{{.app.labels.component}}'
+        # Additional metadata
+        app-name: '{{.app.appName}}'
+        live-config-version: '{{.live.liveConfigVersion}}'
+      annotations:
+        # Values from configs/config.json
+        app.repo.path: '{{.app.path.path}}'
+        app.image.repository: '{{.app.image.repository}}'
+        app.image.tag: '{{.app.image.tag}}'
+        # Values from live-configs/config.json
+        live.db.host: '{{.live.dbConfig.host}}'
+        live.db.database: '{{.live.dbConfig.database}}'
+        live.vault.path: '{{.live.secrets.vaultPath}}'
+        live.resources.cpu: '{{.live.resources.cpu}}'
+        live.resources.memory: '{{.live.resources.memory}}'
+    spec:
+      project: default
+      sources:
+        # Source 1: Application base configs from configs repo
+        - repoURL: https://github.com/drtinkerer/argocd-matrix-generator-test.git
+          targetRevision: main
+          path: '{{.app.path.path}}'
+
+        # Source 2: Live environment configs from live-configs repo
+        - repoURL: https://github.com/drtinkerer/argocd-matrix-generator-test.git
+          targetRevision: main
+          path: 'live-configs/{{.app.configLiveDir}}'
+
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{.app.namespace}}'
+
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+
+---
+# Example showing how to use values in kustomization patches
+# You can reference these values using goTemplate in kustomize patches
+#
+# Example patch using values from both config.json files:
+#
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: nginx
+# spec:
+#   replicas: {{.app.replicas}}
+#   template:
+#     spec:
+#       containers:
+#       - name: nginx
+#         image: {{.app.image.repository}}:{{.app.image.tag}}
+#         env:
+#         - name: DB_HOST
+#           value: "{{.live.dbConfig.host}}"
+#         - name: DB_NAME
+#           value: "{{.live.dbConfig.database}}"
+#         resources:
+#           requests:
+#             cpu: "{{.live.resources.cpu}}"
+#             memory: "{{.live.resources.memory}}"

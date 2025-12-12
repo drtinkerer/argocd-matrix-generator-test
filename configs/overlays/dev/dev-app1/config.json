@@ -1,0 +1,18 @@
+{
+  "matchKey": "dev-app1",
+  "appName": "nginx-app",
+  "environment": "dev",
+  "instance": "dev-app1",
+  "replicas": 1,
+  "namespace": "development",
+  "configLiveDir": "dev/dev-app1",
+  "labels": {
+    "team": "platform",
+    "tier": "frontend",
+    "component": "web-server"
+  },
+  "image": {
+    "repository": "nginx",
+    "tag": "1.25-alpine"
+  }
+}

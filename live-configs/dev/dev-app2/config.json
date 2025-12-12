@@ -1,0 +1,18 @@
+{
+  "matchKey": "dev-app2",
+  "dbConfig": {
+    "host": "dev-db.internal.company.com",
+    "port": 5432,
+    "database": "app2_dev",
+    "ssl": true
+  },
+  "secrets": {
+    "vaultPath": "secret/dev/app2",
+    "apiKeyName": "dev-api-key-app2"
+  },
+  "resources": {
+    "cpu": "250m",
+    "memory": "512Mi"
+  },
+  "liveConfigVersion": "1.0.0"
+}
