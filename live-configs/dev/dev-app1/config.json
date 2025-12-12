@@ -10,8 +10,8 @@
     "apiKeyName": "dev-api-key"
   },
   "resources": {
-    "cpu": "500m",
-    "memory": "1Gi"
+    "cpu": "250m",
+    "memory": "512Mi"
   },
-  "liveConfigVersion": "1.0.0"
+  "liveConfigVersion": "2.0.0"
 }
