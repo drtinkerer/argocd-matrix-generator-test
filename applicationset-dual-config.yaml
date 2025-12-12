@@ -73,8 +73,8 @@ spec:
           path: 'live-configs/{{.app.configLiveDir}}'
 
       destination:
-        server: https://kubernetes.default.svc
         namespace: '{{.app.namespace}}'
+        server: https://connectgateway.googleapis.com/v1beta1/projects/178065171687/locations/europe-west3/gkeMemberships/gke-fa-dev
 
       syncPolicy:
         automated:
