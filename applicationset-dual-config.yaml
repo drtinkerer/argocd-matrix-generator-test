@@ -25,19 +25,10 @@ spec:
                 - path: "live-configs/*/*/config.json"
               pathParamPrefix: live
 
-        # Filter template: Only combine when matchKey matches
-        # This prevents Cartesian product (N x M) and gives us only N matching pairs
-        template:
-          metadata: {}
-          spec: {}
-          template:
-            metadata:
-              # Only proceed if the matchKeys match
-              name: '{{if eq .app.matchKey .live.matchKey}}{{.app.instance}}{{end}}'
-
   template:
     metadata:
-      name: '{{.app.instance}}'
+      # Only create application when matchKeys match (prevents Cartesian product)
+      name: '{{if eq .app.matchKey .live.matchKey}}{{.app.instance}}{{end}}'
       labels:
         # Labels from configs/config.json
         environment: '{{.app.environment}}'
