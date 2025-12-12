@@ -2,211 +2,274 @@
 
 ## TL;DR
 
-Use ArgoCD Matrix Generator to read **TWO** config.json files and merge their values.
+Use ArgoCD Matrix Generator with **dependent path pattern** to combine values from **TWO** config.json files without field collisions.
 
 ## Key Concept
 
 ```
-configs/config.json        +        live-configs/config.json
-(App metadata)                      (Secrets, DB, Resources)
-        ↓                                      ↓
-    .app.* variables        +       .live.* variables
-                            ↓
-              Combined in ApplicationSet template
+Generator 1: configs/config.json          Generator 2: live-configs/config.json
+(contains configLiveDir field)     →     (path uses {{.configLiveDir}})
+                ↓                                      ↓
+      Automatic 1:1 matching - NO Cartesian product!
+```
+
+## The Pattern
+
+```yaml
+generators:
+  - matrix:
+      generators:
+        # Step 1: Read app configs
+        - git:
+            files:
+              - path: "configs/overlays/*/*/config.json"
+            pathParamPrefix: app
+
+        # Step 2: Read ONLY matching live config
+        - git:
+            files:
+              - path: "live-configs/{{.configLiveDir}}/config.json"  # ← Dependent!
+            pathParamPrefix: live
 ```
 
 ## File Structure
 
 ```
 configs/overlays/dev/dev-app1/
-  └── config.json                    # .app.* variables
+  └── config.json                    # Contains configLiveDir: "dev/dev-app1"
 
-live-configs/dev/dev-app1/
-  └── config.json                    # .live.* variables
+live-configs/dev/dev-app1/          # ← Path matches configLiveDir value
+  └── config.json                    # Loaded automatically!
 ```
 
-## Matrix Generator Setup
-
-```yaml
-generators:
-  - matrix:
-      generators:
-        - git:
-            files:
-              - path: "configs/overlays/*/*/config.json"
-            pathParamPrefix: app    # Creates .app.* variables
-
-        - git:
-            files:
-              - path: "live-configs/*/*/config.json"
-            pathParamPrefix: live   # Creates .live.* variables
-
-      # Filter to match only correct pairs
-      template:
-        template:
-          metadata:
-            name: '{{if eq .app.matchKey .live.matchKey}}{{.app.instance}}{{end}}'
-```
-
-## Required matchKey Field
-
-Both config.json files MUST have the same `matchKey`:
+## Required Field: configLiveDir
 
 **configs/overlays/dev/dev-app1/config.json**:
 ```json
 {
-  "matchKey": "dev-app1",   ← Must match
-  "appName": "nginx-app",
-  ...
+  "instance": "dev-app1",
+  "namespace": "development",
+  "configLiveDir": "dev/dev-app1",  ← MUST point to live config directory
+  "replicas": 1
 }
 ```
 
 **live-configs/dev/dev-app1/config.json**:
 ```json
 {
-  "matchKey": "dev-app1",   ← Must match
-  "dbConfig": {...},
-  ...
-}
-```
-
-## Accessing Values
-
-### From configs/config.json → Use `.app.*`
-
-```yaml
-namespace: '{{.app.namespace}}'
-replicas: {{.app.replicas}}
-image: '{{.app.image.repository}}:{{.app.image.tag}}'
-team: '{{.app.labels.team}}'
-```
-
-### From live-configs/config.json → Use `.live.*`
-
-```yaml
-dbHost: '{{.live.dbConfig.host}}'
-cpu: '{{.live.resources.cpu}}'
-memory: '{{.live.resources.memory}}'
-vaultPath: '{{.live.secrets.vaultPath}}'
-```
-
-## Example Values
-
-### configs/config.json
-```json
-{
-  "matchKey": "dev-app1",
-  "appName": "nginx-app",
-  "replicas": 1,
-  "namespace": "development",
-  "image": {
-    "repository": "nginx",
-    "tag": "1.25-alpine"
-  }
-}
-```
-
-### live-configs/config.json
-```json
-{
-  "matchKey": "dev-app1",
   "dbConfig": {
-    "host": "dev-db.company.com",
-    "database": "app1_dev"
+    "host": "dev-db.company.com"
   },
   "resources": {
-    "cpu": "500m",
-    "memory": "1Gi"
+    "cpu": "500m"
   }
 }
 ```
 
-### ApplicationSet Template Usage
+## Accessing Values in Templates
+
+### JSON Fields (No Prefix Needed)
+
+Both config files' JSON fields are accessible directly:
+
 ```yaml
-template:
-  metadata:
-    name: '{{.app.instance}}'              # from configs
-    namespace: '{{.app.namespace}}'         # from configs
-    annotations:
-      db-host: '{{.live.dbConfig.host}}'   # from live-configs
-      cpu: '{{.live.resources.cpu}}'       # from live-configs
+# From configs/config.json
+name: '{{.instance}}'
+namespace: '{{.namespace}}'
+replicas: {{.replicas}}
+team: '{{.labels.team}}'
+image: '{{.image.repository}}:{{.image.tag}}'
+
+# From live-configs/config.json
+dbHost: '{{.dbConfig.host}}'
+cpu: '{{.resources.cpu}}'
+memory: '{{.resources.memory}}'
+vaultPath: '{{.secrets.vaultPath}}'
+```
+
+### Path Fields (Use Prefix)
+
+Path-related fields REQUIRE the prefix:
+
+```yaml
+# From configs path (use .app prefix)
+configPath: '{{.app.path.path}}'          # configs/overlays/dev/dev-app1
+configDir: '{{.app.path.basename}}'       # dev-app1
+
+# From live-configs path (use .live prefix)
+livePath: '{{.live.path.path}}'           # live-configs/dev/dev-app1
+liveDir: '{{.live.path.basename}}'        # dev-app1
+```
+
+## ⚠️ Critical: pathParamPrefix Only Affects Paths!
+
+```yaml
+pathParamPrefix: app  # Creates: .app.path, .app.path.basename
+                      # Does NOT create: .app.instance, .app.namespace
+```
+
+**What gets prefixed:**
+- ✅ `.app.path.path`
+- ✅ `.app.path.basename`
+- ✅ `.app.path.segments`
+- ✅ `.app.path.filename`
+
+**What does NOT get prefixed:**
+- ❌ `.instance` (stays as `.instance`)
+- ❌ `.namespace` (stays as `.namespace`)
+- ❌ `.dbConfig` (stays as `.dbConfig`)
+
+This is why we use **dependent paths**, not field prefixing!
+
+## How It Avoids Cartesian Product
+
+### ❌ Without Dependent Path
+```yaml
+- git:
+    files: ["configs/*/*/config.json"]
+- git:
+    files: ["live-configs/*/*/config.json"]
+```
+**Result:** 2 × 2 = **4 apps** (unwanted combinations)
+
+### ✅ With Dependent Path
+```yaml
+- git:
+    files: ["configs/*/*/config.json"]
+- git:
+    files: ["live-configs/{{.configLiveDir}}/config.json"]
+```
+**Result:** **2 apps** (only matching pairs)
+
+## Complete Example
+
+### ApplicationSet
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: dual-config-apps
+spec:
+  goTemplate: true
+  generators:
+    - matrix:
+        generators:
+          - git:
+              repoURL: https://github.com/company/configs.git
+              files:
+                - path: "apps/*/*/config.json"
+              pathParamPrefix: app
+          - git:
+              repoURL: https://github.com/company/configs-live.git
+              files:
+                - path: "{{.configLiveDir}}/config.json"
+              pathParamPrefix: live
+  template:
+    metadata:
+      name: '{{.instance}}'
+    spec:
+      sources:
+        - repoURL: https://github.com/company/configs.git
+          path: '{{.app.path.path}}'
+        - repoURL: https://github.com/company/configs-live.git
+          path: 'live/{{.configLiveDir}}'
+      destination:
+        namespace: '{{.namespace}}'
+        server: https://kubernetes.default.svc
 ```
 
 ## Validation
 
-Run the validation script:
 ```bash
-./validate-dual-config.sh
-```
+# Check configLiveDir matches directory
+jq '.configLiveDir' configs/overlays/dev/dev-app1/config.json
+# Output: "dev/dev-app1"
 
-Expected output:
-```
-✓ All validations passed!
+# Verify live config exists at that path
+ls live-configs/dev/dev-app1/config.json
+# Should exist!
+
+# Run validation script
+./validate-dual-config.sh
 ```
 
 ## Common Issues
 
 ### 1. No Applications Generated
 
-**Problem**: matchKey values don't match
+**Problem:** `configLiveDir` doesn't match actual directory
 
-**Solution**:
+**Solution:**
 ```bash
-# Check matchKeys align
-jq '.matchKey' configs/overlays/dev/dev-app1/config.json
-jq '.matchKey' live-configs/dev/dev-app1/config.json
+# Check value in config
+jq '.configLiveDir' configs/overlays/dev/dev-app1/config.json
+
+# Verify file exists
+ls live-configs/dev/dev-app1/config.json
 ```
 
-### 2. Getting N×M Applications Instead of N
+### 2. Field Not Found Error
 
-**Problem**: Missing template filter or matchKey
+**Problem:** Trying to use prefix on JSON fields
 
-**Solution**: Ensure template has the filter:
+**Wrong:**
 ```yaml
-template:
-  template:
-    metadata:
-      name: '{{if eq .app.matchKey .live.matchKey}}{{.app.instance}}{{end}}'
+name: '{{.app.instance}}'  # ❌ .app prefix doesn't work for JSON fields
 ```
 
-### 3. Variable Not Found
+**Right:**
+```yaml
+name: '{{.instance}}'      # ✅ JSON fields have no prefix
+path: '{{.app.path.path}}' # ✅ Path fields need prefix
+```
 
-**Problem**: Using wrong prefix
+### 3. Cartesian Product (Too Many Apps)
 
-**Solution**:
-- Configs → `.app.*`
-- Live-configs → `.live.*`
+**Problem:** Not using dependent path in second generator
 
-## Files Created
+**Wrong:**
+```yaml
+- git:
+    files: ["live-configs/*/*/config.json"]  # ❌ Creates all combinations
+```
 
-- `applicationset-dual-config.yaml` - Main ApplicationSet
-- `DUAL-CONFIG-GUIDE.md` - Comprehensive guide
-- `validate-dual-config.sh` - Validation script
-- `configs/overlays/*/*/config.json` - App configs (updated)
-- `live-configs/*/*/config.json` - Live configs (new)
+**Right:**
+```yaml
+- git:
+    files: ["live-configs/{{.configLiveDir}}/config.json"]  # ✅ Only matching
+```
 
-## Usage
+## Use Cases
 
-1. **Validate**: `./validate-dual-config.sh`
-2. **Apply**: `kubectl apply -f applicationset-dual-config.yaml`
-3. **Check**: ArgoCD UI → Applications
+| Scenario | configs/config.json | live-configs/config.json |
+|----------|---------------------|--------------------------|
+| **Development** | Image tags, replicas, namespace | Dev DB, low resources |
+| **Staging** | Image tags, replicas, namespace | Stage DB, medium resources |
+| **Production** | Image tags, replicas, namespace | Prod DB, high resources |
 
-## Comparison
+Each environment has:
+- Same app config structure
+- Different live config values
+- Automatic 1:1 pairing via `configLiveDir`
 
-| Feature | Single Config | Dual Config |
-|---------|--------------|-------------|
-| Config files | 1 | 2 |
-| Separation | ❌ | ✅ |
-| Access control | Same | Different |
-| Complexity | Low | Medium |
-| Security | Basic | Enhanced |
+## Key Benefits
+
+1. ✅ **No Field Collisions** - Dependent path prevents conflicts
+2. ✅ **Simple Access** - No prefixes needed for JSON fields
+3. ✅ **1:1 Matching** - No Cartesian product
+4. ✅ **Separate Repos** - Different access controls
+5. ✅ **Independent Updates** - Change one without touching the other
 
 ## Next Steps
 
-1. ✅ Understand the concept
-2. ✅ Review file structure
-3. ✅ Run validation script
+1. ✅ Understand the dependent path pattern
+2. ✅ Create config.json with `configLiveDir` field
+3. ✅ Create matching live-configs directory
 4. ✅ Apply ApplicationSet
 5. ✅ Verify in ArgoCD UI
 
 For detailed information, see [DUAL-CONFIG-GUIDE.md](./DUAL-CONFIG-GUIDE.md)
+
+## Reference
+
+Based on: [ArgoCD Matrix Generator - Two Git Generators](https://argo-cd.readthedocs.io/en/latest/operator-manual/applicationset/Generators-Matrix/#example-two-git-generators-using-pathparamprefix)

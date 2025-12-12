@@ -1,108 +1,88 @@
 # ArgoCD Dual Config Matrix Generator Example
 
-This repository demonstrates how to use **ArgoCD ApplicationSet with Matrix Generator** to combine values from **two separate config.json files** - one for application configuration and another for live/sensitive configuration.
+This repository demonstrates how to use **ArgoCD ApplicationSet with Matrix Generator** to combine values from **two separate config.json files** using the **dependent path pattern**.
 
-## 🎯 What This Solves
+## 🎯 The Problem This Solves
 
 When managing applications with ArgoCD, you often need to:
 - Separate application configs from sensitive/live configs
-- Use different Git repositories or access controls for different config types
-- Merge values from multiple sources in your ApplicationSet
+- Use different Git repositories (or directories) with different access controls
+- Merge values from multiple config.json files without manual coordination
 
-This example shows you how to achieve this using ArgoCD's Matrix Generator.
+**The Challenge:** ArgoCD's `pathParamPrefix` only prefixes PATH variables, NOT JSON fields from config.json. This means fields from the second config.json would overwrite the first, creating conflicts.
+
+**The Solution:** Use a **dependent path pattern** where the second generator's file path references a field from the first generator, creating automatic 1:1 matching instead of a Cartesian product.
+
+## 🔑 Key Pattern: Dependent Path
+
+```yaml
+generators:
+  - matrix:
+      generators:
+        # Generator 1: Scans all app configs
+        - git:
+            files:
+              - path: "configs/overlays/*/*/config.json"
+            pathParamPrefix: app
+
+        # Generator 2: Loads ONLY the matching live config
+        # Uses {{.configLiveDir}} from Generator 1
+        - git:
+            files:
+              - path: "live-configs/{{.configLiveDir}}/config.json"  # ← Dependent path!
+            pathParamPrefix: live
+```
+
+**How it works:**
+- Generator 1 reads `configs/overlays/dev/dev-app1/config.json` which contains `"configLiveDir": "dev/dev-app1"`
+- Generator 2 uses that value to load `live-configs/dev/dev-app1/config.json`
+- **Result:** Only matching pairs are created (dev-app1 ↔ dev-app1), NOT a Cartesian product!
 
 ## 📁 Repository Structure
 
 ```
 .
-├── applicationset-dual-config.yaml    # ArgoCD ApplicationSet with Matrix Generator
+├── applicationset-dual-config.yaml    # ArgoCD ApplicationSet
 │
 ├── configs/                            # Application configurations
-│   ├── base/                          # Base Kubernetes resources
-│   │   ├── deployment.yaml
-│   │   ├── configmap.yaml
-│   │   └── kustomization.yaml
-│   └── overlays/                      # Environment-specific overlays
-│       ├── dev/
-│       │   ├── dev-app1/
-│       │   │   ├── config.json        # App metadata, image, replicas
-│       │   │   └── kustomization.yaml
-│       │   └── dev-app2/
-│       │       ├── config.json
-│       │       └── kustomization.yaml
-│       └── stage/
-│           └── stage-app1/
+│   └── overlays/
+│       └── dev/
+│           ├── dev-app1/
+│           │   ├── config.json        # Contains: instance, namespace, configLiveDir, etc.
+│           │   └── kustomization.yaml
+│           └── dev-app2/
 │               ├── config.json
 │               └── kustomization.yaml
 │
-├── live-configs/                       # Live/sensitive configurations
-│   ├── dev/
-│   │   ├── dev-app1/
-│   │   │   ├── config.json            # DB config, secrets, resources
-│   │   │   ├── kustomization.yaml
-│   │   │   └── config/
-│   │   │       └── app.properties
-│   │   └── dev-app2/
-│   │       ├── config.json
-│   │       ├── kustomization.yaml
-│   │       └── config/
-│   │           └── app.properties
-│   └── stage/
-│       └── stage-app1/
-│           ├── config.json
-│           ├── kustomization.yaml
-│           └── config/
-│               └── app.properties
-│
-├── DUAL-CONFIG-GUIDE.md                # Comprehensive documentation
-├── QUICK-REFERENCE.md                  # Quick reference guide
-└── validate-dual-config.sh             # Validation script
+└── live-configs/                       # Live/sensitive configurations
+    └── dev/
+        ├── dev-app1/
+        │   ├── config.json            # Contains: dbConfig, secrets, resources
+        │   ├── kustomization.yaml
+        │   └── config/
+        │       └── app.properties
+        └── dev-app2/
+            ├── config.json
+            ├── kustomization.yaml
+            └── config/
+                └── app.properties
 ```
 
-## 🚀 Quick Start
+## 💡 The Two Config Files
 
-### 1. Validate the Configuration
-
-Run the validation script to ensure everything is set up correctly:
-
-```bash
-./validate-dual-config.sh
-```
-
-Expected output:
-```
-✓ All validations passed!
-Your dual config.json setup is ready to use.
-```
-
-### 2. Apply the ApplicationSet
-
-Deploy to your ArgoCD instance:
-
-```bash
-kubectl apply -f applicationset-dual-config.yaml
-```
-
-### 3. Verify in ArgoCD
-
-Check the ArgoCD UI to see the generated applications:
-- `dev-app1`
-- `dev-app2`
-- `stage-app1`
-
-## 💡 How It Works
-
-### Dual Config.json Approach
-
-The matrix generator reads **two config.json files** for each application:
-
-**1. configs/overlays/dev/dev-app1/config.json** (Application Config):
+### configs/overlays/dev/dev-app1/config.json
 ```json
 {
-  "matchKey": "dev-app1",
   "appName": "nginx-app",
+  "environment": "dev",
+  "instance": "dev-app1",
   "replicas": 1,
   "namespace": "development",
+  "configLiveDir": "dev/dev-app1",  ← Links to live config!
+  "labels": {
+    "team": "platform",
+    "tier": "frontend"
+  },
   "image": {
     "repository": "nginx",
     "tag": "1.25-alpine"
@@ -110,13 +90,16 @@ The matrix generator reads **two config.json files** for each application:
 }
 ```
 
-**2. live-configs/dev/dev-app1/config.json** (Live/Sensitive Config):
+### live-configs/dev/dev-app1/config.json
 ```json
 {
-  "matchKey": "dev-app1",
   "dbConfig": {
     "host": "dev-db.internal.company.com",
+    "port": 5432,
     "database": "app1_dev"
+  },
+  "secrets": {
+    "vaultPath": "secret/dev/app1"
   },
   "resources": {
     "cpu": "500m",
@@ -125,86 +108,115 @@ The matrix generator reads **two config.json files** for each application:
 }
 ```
 
-### Matrix Generator Configuration
+## 🚀 Quick Start
+
+### 1. Validate Configuration
+
+```bash
+./validate-dual-config.sh
+```
+
+### 2. Update Destination Server
+
+Edit `applicationset-dual-config.yaml` and set your cluster:
 
 ```yaml
-generators:
-  - matrix:
-      generators:
-        # Generator 1: Read app configs → .app.* variables
-        - git:
-            files:
-              - path: "configs/overlays/*/*/config.json"
-            pathParamPrefix: app
-
-        # Generator 2: Read live configs → .live.* variables
-        - git:
-            files:
-              - path: "live-configs/*/*/config.json"
-            pathParamPrefix: live
-
-      # Filter: Only match when matchKeys align
-      template:
-        template:
-          metadata:
-            name: '{{if eq .app.matchKey .live.matchKey}}{{.app.instance}}{{end}}'
+destination:
+  namespace: '{{.namespace}}'
+  server: https://your-kubernetes-cluster
 ```
 
-### Accessing Values in Templates
+### 3. Apply ApplicationSet
 
-**From configs** (prefix `.app.*`):
+```bash
+kubectl apply -f applicationset-dual-config.yaml
+```
+
+### 4. Verify Applications
+
+```bash
+kubectl get applications -n argocd | grep dev-app
+```
+
+You should see:
+- `dev-app1` - Created from dev-app1 configs + dev-app1 live configs
+- `dev-app2` - Created from dev-app2 configs + dev-app2 live configs
+
+## 🔍 How to Access Fields in Templates
+
+### From configs/config.json (Generator 1)
+
+Access JSON fields directly (no prefix):
 ```yaml
-namespace: '{{.app.namespace}}'
-replicas: {{.app.replicas}}
-image: '{{.app.image.repository}}:{{.app.image.tag}}'
+instance: '{{.instance}}'
+namespace: '{{.namespace}}'
+replicas: '{{.replicas}}'
+team: '{{.labels.team}}'
+image: '{{.image.repository}}:{{.image.tag}}'
 ```
 
-**From live-configs** (prefix `.live.*`):
+Access path fields with prefix:
 ```yaml
-dbHost: '{{.live.dbConfig.host}}'
-cpu: '{{.live.resources.cpu}}'
-memory: '{{.live.resources.memory}}'
+path: '{{.app.path.path}}'          # configs/overlays/dev/dev-app1
+basename: '{{.app.path.basename}}'  # dev-app1
 ```
 
-## 📚 Documentation
+### From live-configs/config.json (Generator 2)
 
-- **[QUICK-REFERENCE.md](./QUICK-REFERENCE.md)** - Quick reference for common tasks
-- **[DUAL-CONFIG-GUIDE.md](./DUAL-CONFIG-GUIDE.md)** - Comprehensive guide with examples and troubleshooting
-
-## ✨ Key Features
-
-1. **Separation of Concerns**: Application config separate from sensitive data
-2. **Flexible Access Control**: Different repos can have different permissions
-3. **Matched Pairs**: Uses `matchKey` to prevent Cartesian product explosion
-4. **Dual Variables**: Access values with `.app.*` and `.live.*` prefixes
-5. **Multi-Source**: Each application combines both config sources
-6. **Validated**: Includes comprehensive validation script
-
-## 🔑 Key Requirement: matchKey
-
-Both config.json files **must have matching `matchKey` values**:
-
-```json
-// configs/config.json
-{
-  "matchKey": "dev-app1",  ← Must match
-  ...
-}
-
-// live-configs/config.json
-{
-  "matchKey": "dev-app1",  ← Must match
-  ...
-}
+Access JSON fields directly (no prefix):
+```yaml
+dbHost: '{{.dbConfig.host}}'
+dbPort: '{{.dbConfig.port}}'
+cpu: '{{.resources.cpu}}'
+memory: '{{.resources.memory}}'
+vaultPath: '{{.secrets.vaultPath}}'
 ```
 
-This ensures the matrix generator creates **only matching pairs** instead of a full Cartesian product.
+Access path fields with prefix:
+```yaml
+path: '{{.live.path.path}}'          # live-configs/dev/dev-app1
+basename: '{{.live.path.basename}}'  # dev-app1
+```
 
-## 🛠️ Common Use Cases
+## ⚠️ Important: Why pathParamPrefix Alone Doesn't Work
 
-### Separate Repositories
+**Common Misconception:** "Using `pathParamPrefix: app` and `pathParamPrefix: live` will namespace all fields."
 
-In production, you might use different repositories:
+**Reality:** `pathParamPrefix` ONLY prefixes path-related variables:
+- ✅ `.app.path`, `.app.path.basename`, `.app.path.segments`
+- ❌ NOT `.instance`, `.namespace`, `.replicas` (these remain unprefixed)
+
+This is why we use the **dependent path pattern** instead of trying to namespace JSON fields.
+
+## 📊 Comparison: With vs Without Dependent Path
+
+### ❌ Without Dependent Path (Cartesian Product)
+```yaml
+- git:
+    files:
+      - path: "configs/*/*/config.json"
+- git:
+    files:
+      - path: "live-configs/*/*/config.json"
+```
+**Result:** 2 configs × 2 live-configs = **4 applications** (many unwanted)
+
+### ✅ With Dependent Path (1:1 Matching)
+```yaml
+- git:
+    files:
+      - path: "configs/*/*/config.json"
+- git:
+    files:
+      - path: "live-configs/{{.configLiveDir}}/config.json"
+```
+**Result:** **2 applications** (only matching pairs)
+
+## 🛠️ Use Cases
+
+### 1. Separate Repositories
+
+In production, use different Git repositories for security:
 
 ```yaml
 generators:
@@ -213,68 +225,85 @@ generators:
         - git:
             repoURL: https://github.com/company/app-configs.git
             files:
-              - path: "overlays/*/*/config.json"
+              - path: "apps/*/*/config.json"
             pathParamPrefix: app
         - git:
-            repoURL: https://github.com/company/app-configs-live.git  # Restricted repo
+            repoURL: https://github.com/company/app-configs-live.git  # Restricted access
             files:
-              - path: "*/*/config.json"
+              - path: "{{.configLiveDir}}/config.json"
             pathParamPrefix: live
 ```
 
-### Different Access Controls
+### 2. Different Access Controls
 
-- **app-configs**: Accessible to dev team
-- **app-configs-live**: Restricted to ops/security team
+- **app-configs**: Accessible to development team (image tags, replicas, namespaces)
+- **app-configs-live**: Restricted to ops/security team (DB credentials, vault paths, resource limits)
 
-### Independent Update Cycles
+### 3. Independent Update Cycles
 
-- Update app configs (image tags, replicas) independently
-- Update live configs (DB hosts, resource limits) independently
-- ArgoCD automatically syncs changes from both
+- Update app configs (image versions) without touching sensitive configs
+- Update live configs (resource limits, DB endpoints) without touching app definitions
+- ArgoCD automatically syncs changes from both sources
 
 ## 🐛 Troubleshooting
 
 ### No Applications Generated
 
-Check that matchKeys align:
+Check that `configLiveDir` values are correct:
+```bash
+jq '.configLiveDir' configs/overlays/dev/dev-app1/config.json
+# Should output: "dev/dev-app1"
+
+# Verify matching file exists:
+ls -la live-configs/dev/dev-app1/config.json
+```
+
+### Shared Resource Warning
+
+If you see warnings about shared ConfigMaps/resources, ensure each app has unique resource names in their kustomization.yaml files.
+
+### Template Errors
+
+Run validation:
 ```bash
 ./validate-dual-config.sh
 ```
 
-### Wrong Number of Applications
-
-Ensure template filter exists:
-```yaml
-template:
-  template:
-    metadata:
-      name: '{{if eq .app.matchKey .live.matchKey}}{{.app.instance}}{{end}}'
+Check ApplicationSet status:
+```bash
+kubectl describe applicationset dual-config-matrix-apps -n argocd
 ```
 
-### Cannot Access Variables
+## 📚 Documentation
 
-- Use `.app.*` for configs values
-- Use `.live.*` for live-configs values
-- Check field exists in config.json: `jq . configs/overlays/dev/dev-app1/config.json`
+- **[QUICK-REFERENCE.md](./QUICK-REFERENCE.md)** - Quick lookup guide
+- **[DUAL-CONFIG-GUIDE.md](./DUAL-CONFIG-GUIDE.md)** - Comprehensive guide with examples
 
-## 📖 Additional Resources
+## 📖 References
 
-- [ArgoCD ApplicationSet Documentation](https://argo-cd.readthedocs.io/en/stable/user-guide/application-set/)
-- [Matrix Generator Documentation](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/Generators-Matrix/)
-- [Git Generator Documentation](https://argo-cd.readthedocs.io/en/stable/operator-manual/applicationset/Generators-Git/)
+This pattern is based on the official ArgoCD documentation:
+- [Matrix Generator - Two Git Generators Using pathParamPrefix](https://argo-cd.readthedocs.io/en/latest/operator-manual/applicationset/Generators-Matrix/#example-two-git-generators-using-pathparamprefix)
+- [Git Generator Documentation](https://argo-cd.readthedocs.io/en/latest/operator-manual/applicationset/Generators-Git/)
+
+## ✨ Key Takeaways
+
+1. **Dependent Path Pattern**: Second generator references fields from first generator
+2. **pathParamPrefix**: Only prefixes PATH variables, not JSON fields
+3. **1:1 Matching**: Avoids Cartesian product by loading only matching configs
+4. **Nested JSON Access**: Access nested fields directly (e.g., `{{.dbConfig.host}}`)
+5. **Simple & Clean**: No need for unique field name prefixes or complex filtering
 
 ## 🤝 Contributing
 
-This is an example repository. Feel free to fork and adapt for your use case!
+This is an example repository demonstrating ArgoCD patterns. Feel free to fork and adapt!
 
 ## 📝 License
 
-MIT License - Feel free to use this example in your projects.
+MIT License - Use freely in your projects.
 
 ---
 
 **Quick Links:**
-- [Quick Reference](./QUICK-REFERENCE.md) - Fast lookup
-- [Complete Guide](./DUAL-CONFIG-GUIDE.md) - Detailed documentation
-- [Validation Script](./validate-dual-config.sh) - Test your setup
+- [Quick Reference](./QUICK-REFERENCE.md)
+- [Complete Guide](./DUAL-CONFIG-GUIDE.md)
+- [Validation Script](./validate-dual-config.sh)
