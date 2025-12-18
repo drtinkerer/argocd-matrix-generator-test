@@ -1,4 +1,4 @@
 {
-  "argocdUpdaterImageList": "app1=registry.example.com/another-service:SHOULD-OVERRIDE-BUT-WONT",
+  "argocdUpdaterImageList": "app1=registry.example.com/redis-app:SHOULD-OVERRIDE-BUT-WONT",
   "argocdUpdateStrategy": "digest"
 }

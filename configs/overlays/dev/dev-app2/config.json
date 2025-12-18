@@ -1,10 +1,10 @@
 {
-  "appName": "ra-another-service",
+  "appName": "redis-app",
   "srcRepoBranch": "main",
   "environment": "dev",
   "commit_sha": "",
-  "appRepoUrl": "https://github.com/example/another-service",
+  "appRepoUrl": "https://github.com/example/redis-app",
   "appRepoBranch": "dev",
   "configLiveDir": "dev/dev-app2",
-  "argocdUpdaterImageList": "app1=registry.example.com/another-service:FALLBACK-FROM-CONFIGS"
+  "argocdUpdaterImageList": "app1=registry.example.com/redis-app:FALLBACK-FROM-CONFIGS"
 }

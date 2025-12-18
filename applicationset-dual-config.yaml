@@ -28,7 +28,7 @@ spec:
 
   template:
     metadata:
-      name: 'test-{{.appName}}'
+      name: '{{.appName}}'
       labels:
         appName: '{{.appName}}'
         appRepoBranch: '{{.appRepoBranch}}'
@@ -61,5 +61,5 @@ spec:
           path: '{{.app.path.path}}'
           targetRevision: main
         - repoURL: https://github.com/drtinkerer/argocd-matrix-generator-test.git
-          path: '{{.appName}}/{{.configLiveDir}}'
+          path: 'live-configs/{{.configLiveDir}}'
           targetRevision: main

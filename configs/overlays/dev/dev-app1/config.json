@@ -1,9 +1,9 @@
 {
-  "appName": "ra-test-service",
+  "appName": "nginx-app",
   "srcRepoBranch": "main",
   "environment": "dev",
   "commit_sha": "",
-  "appRepoUrl": "https://github.com/example/test-service",
+  "appRepoUrl": "https://github.com/example/nginx-app",
   "appRepoBranch": "dev",
   "configLiveDir": "dev/dev-app1"
 }

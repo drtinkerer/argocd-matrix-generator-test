@@ -1,4 +1,4 @@
 {
-  "argocdUpdaterImageList": "app1=registry.example.com/test-service:CORRECT-FROM-LIVE",
+  "argocdUpdaterImageList": "app1=registry.example.com/nginx-app:CORRECT-FROM-LIVE",
   "argocdUpdateStrategy": "digest"
 }
