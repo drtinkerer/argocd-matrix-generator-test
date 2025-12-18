@@ -28,7 +28,7 @@ spec:
 
   template:
     metadata:
-      name: '{{.appName}}'
+      name: 'bhushan-test-{{.appName}}'
       labels:
         appName: '{{.appName}}'
         appRepoBranch: '{{.appRepoBranch}}'
@@ -44,7 +44,7 @@ spec:
     spec:
       project: default
       destination:
-        namespace: test-namespace
+        namespace: bhushan-test
         server: https://kubernetes.default.svc
       revisionHistoryLimit: 3
       syncPolicy:
