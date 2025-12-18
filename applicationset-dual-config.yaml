@@ -48,10 +48,6 @@ spec:
         server: https://kubernetes.default.svc
       revisionHistoryLimit: 3
       syncPolicy:
-        automated:
-          allowEmpty: true
-          prune: true
-          selfHeal: false
         syncOptions:
           - CreateNamespace=false
   templatePatch: |
