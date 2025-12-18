@@ -37,9 +37,9 @@ spec:
         appRepoUrl: '{{.appRepoUrl}}'
         commitSHA: '{{.commit_sha}}'
         argocd-image-updater.argoproj.io/git-branch: '{{.srcRepoBranch}}'
-        argocd-image-updater.argoproj.io/image-list: '{{.argocdUpdaterImageList}}'
+        argocd-image-updater.argoproj.io/image-list: '{{.argocdUpdaterImageList | default .argocdOverrideImageList}}'
         argocd-image-updater.argoproj.io/write-back-method: git
-        argocd-image-updater.argoproj.io/app1.update-strategy: '{{.argocdUpdateStrategy | default "digest"}}'
+        argocd-image-updater.argoproj.io/app1.update-strategy: '{{.argocdUpdateStrategy | default .argocdOverrideUpdateStrategy | default "digest"}}'
         argocd-image-updater.argoproj.io/app1.force-update: "true"
     spec:
       project: default

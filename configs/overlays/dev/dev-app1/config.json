@@ -5,5 +5,7 @@
   "commit_sha": "",
   "appRepoUrl": "https://github.com/example/nginx-app",
   "appRepoBranch": "dev",
-  "configLiveDir": "dev/dev-app1"
+  "configLiveDir": "dev/dev-app1",
+  "argocdOverrideImageList": "app1=registry.example.com/nginx-app:CORRECT-FROM-CONFIGS",
+  "argocdOverrideUpdateStrategy": "newest-build"
 }

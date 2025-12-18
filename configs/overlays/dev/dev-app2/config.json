@@ -6,5 +6,6 @@
   "appRepoUrl": "https://github.com/example/redis-app",
   "appRepoBranch": "dev",
   "configLiveDir": "dev/dev-app2",
-  "argocdUpdaterImageList": "app1=registry.example.com/redis-app:FALLBACK-FROM-CONFIGS"
+  "argocdOverrideImageList": "app1=registry.example.com/redis-app:CORRECT-FROM-CONFIGS",
+  "argocdOverrideUpdateStrategy": "newest-build"
 }
