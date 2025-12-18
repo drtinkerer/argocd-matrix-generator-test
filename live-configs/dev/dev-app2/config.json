@@ -13,5 +13,8 @@
     "cpu": "125m",
     "memory": "256Mi"
   },
-  "liveConfigVersion": "2.0.0"
+  "liveConfigVersion": "2.0.0",
+  "argocdUpdaterImageList": "app1=nginx:OVERRIDE-FROM-LIVE-CONFIGS",
+  "argocdUpdateStrategy": "digest",
+  "testCommonKey": "VALUE_FROM_LIVE_CONFIGS_WINS"
 }

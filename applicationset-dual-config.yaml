@@ -52,6 +52,11 @@ spec:
         live.resources.cpu: '{{.resources.cpu}}'
         live.resources.memory: '{{.resources.memory}}'
         live.path: '{{.live.path.path}}'
+        # COMMON KEYS TEST - These exist in BOTH configs and live-configs
+        # The value from live-configs should OVERRIDE the value from configs
+        test.common-key: '{{.testCommonKey}}'
+        test.argocd-image-list: '{{.argocdUpdaterImageList}}'
+        test.argocd-strategy: '{{.argocdUpdateStrategy | default "digest"}}'
     spec:
       project: default
       sources:

@@ -13,5 +13,7 @@
   "image": {
     "repository": "nginx",
     "tag": "1.25-alpine"
-  }
+  },
+  "argocdUpdaterImageList": "app1=nginx:fallback-from-configs",
+  "testCommonKey": "VALUE_FROM_CONFIGS"
 }
