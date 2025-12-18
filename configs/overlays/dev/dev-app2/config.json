@@ -1,19 +1,10 @@
 {
-  "appName": "nginx-app",
+  "appName": "ra-another-service",
+  "srcRepoBranch": "main",
   "environment": "dev",
-  "instance": "dev-app2",
-  "replicas": 2,
-  "namespace": "development",
+  "commit_sha": "",
+  "appRepoUrl": "https://github.com/example/another-service",
+  "appRepoBranch": "dev",
   "configLiveDir": "dev/dev-app2",
-  "labels": {
-    "team": "backend",
-    "tier": "backend",
-    "component": "api-server"
-  },
-  "image": {
-    "repository": "nginx",
-    "tag": "1.25-alpine"
-  },
-  "argocdUpdaterImageList": "app1=nginx:fallback-from-configs",
-  "testCommonKey": "VALUE_FROM_CONFIGS"
+  "argocdUpdaterImageList": "app1=registry.example.com/another-service:FALLBACK-FROM-CONFIGS"
 }

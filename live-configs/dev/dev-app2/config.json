@@ -1,20 +1,4 @@
 {
-  "dbConfig": {
-    "host": "dev-db.internal.company.com",
-    "port": 5432,
-    "database": "app2_dev",
-    "ssl": true
-  },
-  "secrets": {
-    "vaultPath": "secret/dev/app2",
-    "apiKeyName": "dev-api-key-app2"
-  },
-  "resources": {
-    "cpu": "125m",
-    "memory": "256Mi"
-  },
-  "liveConfigVersion": "2.0.0",
-  "argocdUpdaterImageList": "app1=nginx:OVERRIDE-FROM-LIVE-CONFIGS",
-  "argocdUpdateStrategy": "digest",
-  "testCommonKey": "VALUE_FROM_LIVE_CONFIGS_WINS"
+  "argocdUpdaterImageList": "app1=registry.example.com/another-service:SHOULD-OVERRIDE-BUT-WONT",
+  "argocdUpdateStrategy": "digest"
 }

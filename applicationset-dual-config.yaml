@@ -28,55 +28,38 @@ spec:
 
   template:
     metadata:
-      name: '{{.instance}}'
+      name: 'test-{{.appName}}'
       labels:
-        # Labels from configs/config.json
+        appName: '{{.appName}}'
+        appRepoBranch: '{{.appRepoBranch}}'
         environment: '{{.environment}}'
-        instance: '{{.instance}}'
-        team: '{{.labels.team}}'
-        tier: '{{.labels.tier}}'
-        component: '{{.labels.component}}'
-        app-name: '{{.appName}}'
-        # Labels from live-configs/config.json
-        live-config-version: '{{.liveConfigVersion}}'
       annotations:
-        # Values from configs/config.json (no prefix needed for JSON fields)
-        app.replicas: '{{.replicas}}'
-        app.image: '{{.image.repository}}:{{.image.tag}}'
-        app.path: '{{.app.path.path}}'
-        # Values from live-configs/config.json
-        live.db.host: '{{.dbConfig.host}}'
-        live.db.port: '{{.dbConfig.port}}'
-        live.db.name: '{{.dbConfig.database}}'
-        live.vault.path: '{{.secrets.vaultPath}}'
-        live.resources.cpu: '{{.resources.cpu}}'
-        live.resources.memory: '{{.resources.memory}}'
-        live.path: '{{.live.path.path}}'
-        # COMMON KEYS TEST - These exist in BOTH configs and live-configs
-        # The value from live-configs should OVERRIDE the value from configs
-        test.common-key: '{{.testCommonKey}}'
-        test.argocd-image-list: '{{.argocdUpdaterImageList}}'
-        test.argocd-strategy: '{{.argocdUpdateStrategy | default "digest"}}'
+        appRepoUrl: '{{.appRepoUrl}}'
+        commitSHA: '{{.commit_sha}}'
+        argocd-image-updater.argoproj.io/git-branch: '{{.srcRepoBranch}}'
+        argocd-image-updater.argoproj.io/image-list: '{{.argocdUpdaterImageList}}'
+        argocd-image-updater.argoproj.io/write-back-method: git
+        argocd-image-updater.argoproj.io/app1.update-strategy: '{{.argocdUpdateStrategy | default "digest"}}'
+        argocd-image-updater.argoproj.io/app1.force-update: "true"
     spec:
       project: default
-      sources:
-        # Source 1: Application base configs from configs repo
-        - repoURL: https://github.com/drtinkerer/argocd-matrix-generator-test.git
-          targetRevision: main
-          path: '{{.app.path.path}}'
-
-        # Source 2: Live environment configs from live-configs repo
-        - repoURL: https://github.com/drtinkerer/argocd-matrix-generator-test.git
-          targetRevision: main
-          path: 'live-configs/{{.configLiveDir}}'
-
       destination:
-        namespace: '{{.namespace}}'
-        server: https://connectgateway.googleapis.com/v1beta1/projects/178065171687/locations/europe-west3/gkeMemberships/gke-fa-dev
-
+        namespace: test-namespace
+        server: https://kubernetes.default.svc
+      revisionHistoryLimit: 3
       syncPolicy:
         automated:
+          allowEmpty: true
           prune: true
-          selfHeal: true
+          selfHeal: false
         syncOptions:
-          - CreateNamespace=true
+          - CreateNamespace=false
+  templatePatch: |
+    spec:
+      sources:
+        - repoURL: https://github.com/drtinkerer/argocd-matrix-generator-test.git
+          path: '{{.app.path.path}}'
+          targetRevision: main
+        - repoURL: https://github.com/drtinkerer/argocd-matrix-generator-test.git
+          path: '{{.appName}}/{{.configLiveDir}}'
+          targetRevision: main
